@@ -1,0 +1,6 @@
+openai-whisper
+sounddevice
+soundfile
+google-generativeai
+fpdf2
+numpy
