@@ -1,6 +1,8 @@
 openai-whisper
-sounddevice
+pyaudiowpatch
 soundfile
-google-generativeai
+scipy
+google-genai
 fpdf2
 numpy
+python-dotenv

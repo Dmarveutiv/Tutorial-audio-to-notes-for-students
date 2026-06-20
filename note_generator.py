@@ -1,17 +1,12 @@
-import google.generativeai as genai
-from dotenv import load_dotenv
-import os
-
+from google import genai
 
 class NoteGenerator:
     def __init__(self, api_key):
         """
-        api_key: your Gemini API key (from https://aistudio.google.com/app/apikey)
+        api_key: your Gemini API key, loaded securely from .env in main.py
         """
-        load_dotenv()  # reads the .env file
-        api_key = os.getenv("Gemini_Api_Key")  # grabs the value
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.client = genai.Client(api_key=api_key)
+        self.model_name = "gemini-2.5-flash"
 
     def generate_notes(self, transcript, video_title="Tutorial"):
         """
@@ -41,7 +36,10 @@ Return only the structured notes, formatted in Markdown.
 """
 
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             return response.text
         except Exception as e:
             print(f"Gemini API error: {e}")

@@ -1,120 +1,117 @@
-import sounddevice as sd
+import pyaudiowpatch as pyaudio
 import soundfile as sf
 import numpy as np
 import threading
-import queue
-import os
 import tempfile
+from scipy.signal import resample
 
-CHUNK_DURATION = 30      # seconds per chunk sent to Whisper
-SAMPLE_RATE = 16000      # Whisper works best at 16kHz
+CHUNK_DURATION = 30
+TARGET_SAMPLE_RATE = 16000
+FRAMES_PER_BUFFER = 1024
+
 
 class AudioCapture:
     def __init__(self, chunk_callback):
-        """
-        chunk_callback: a function that gets called every time
-        a 30-second audio chunk is ready for transcription
-        """
         self.chunk_callback = chunk_callback
         self.is_recording = False
-        self.audio_queue = queue.Queue()
         self.thread = None
+        self.native_sample_rate = None
+        self.channels = None
 
-    def get_wasapi_loopback_device(self):
-        """Find the WASAPI loopback device (system audio)"""
-        devices = sd.query_devices()
-        for i, device in enumerate(devices):
-            if device['max_input_channels'] > 0 and 'loopback' in device['name'].lower():
-                return i
-        # Fallback: find default WASAPI loopback
-        for i, device in enumerate(devices):
-            if device['max_input_channels'] > 0 and device['hostapi'] != 0:
-                return i
-        return None  # Will use default mic if no loopback found
+    def _get_loopback_device(self, p):
+        """Find the default WASAPI loopback device (system output capture)"""
+        wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+        default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+
+        if not default_speakers.get("isLoopbackDevice", False):
+            for loopback in p.get_loopback_device_info_generator():
+                if default_speakers["name"] in loopback["name"]:
+                    return loopback
+            raise RuntimeError("Could not find loopback device matching default speakers.")
+
+        return default_speakers
 
     def start(self):
-        """Start capturing audio in a background thread"""
         self.is_recording = True
         self.thread = threading.Thread(target=self._capture_loop, daemon=True)
         self.thread.start()
-        print("Audio capture started...")
+        print("Audio capture started.")
 
     def stop(self):
-        """Stop capturing audio"""
         self.is_recording = False
         if self.thread:
             self.thread.join(timeout=5)
         print("Audio capture stopped.")
 
     def _capture_loop(self):
-        """Main loop that captures audio in 30-second chunks"""
-        device_index = self.get_wasapi_loopback_device()
-
-        if device_index is None:
-            print("Warning: No WASAPI loopback found, falling back to default microphone.")
-
-        frames_per_chunk = CHUNK_DURATION * SAMPLE_RATE
-        recorded_frames = []
-
-        def audio_callback(indata, frames, time, status):
-            if status:
-                print(f"Audio status: {status}")
-            # Store a copy of the incoming audio data
-            recorded_frames.append(indata.copy())
+        p = pyaudio.PyAudio()
 
         try:
-            with sd.InputStream(
-                device=device_index,
-                samplerate=SAMPLE_RATE,
-                channels=1,
-                dtype='float32',
-                callback=audio_callback,
-                blocksize=1024
-            ):
-                while self.is_recording:
-                    # Wait until we have enough frames for a full chunk
-                    total_frames = sum(len(f) for f in recorded_frames)
+            device = self._get_loopback_device(p)
+            self.native_sample_rate = int(device["defaultSampleRate"])
+            self.channels = device["maxInputChannels"]
 
-                    if total_frames >= frames_per_chunk:
-                        # Combine all recorded frames into one array
-                        audio_data = np.concatenate(recorded_frames, axis=0)
-                        chunk = audio_data[:frames_per_chunk]
+            print(f"Listening via: {device['name']}")
 
-                        # Keep any leftover frames for the next chunk
-                        leftover = audio_data[frames_per_chunk:]
-                        recorded_frames.clear()
-                        if len(leftover) > 0:
-                            recorded_frames.append(leftover)
+            frames_per_chunk = CHUNK_DURATION * self.native_sample_rate
+            recorded_frames = []
+            frames_collected = 0
 
-                        # Save chunk to a temp file and trigger transcription
-                        self._save_and_dispatch(chunk)
+            stream = p.open(
+                format=pyaudio.paFloat32,
+                channels=self.channels,
+                rate=self.native_sample_rate,
+                input=True,
+                input_device_index=device["index"],
+                frames_per_buffer=FRAMES_PER_BUFFER
+            )
 
-                    sd.sleep(500)  # check every 500ms
+            while self.is_recording:
+                data = stream.read(FRAMES_PER_BUFFER, exception_on_overflow=False)
+                audio_block = np.frombuffer(data, dtype=np.float32)
 
-            # Handle any remaining audio when stopped
+                if self.channels > 1:
+                    audio_block = audio_block.reshape(-1, self.channels)
+                    audio_block = audio_block.mean(axis=1)
+
+                recorded_frames.append(audio_block)
+                frames_collected += len(audio_block)
+
+                if frames_collected >= frames_per_chunk:
+                    full_audio = np.concatenate(recorded_frames)
+                    chunk = full_audio[:frames_per_chunk]
+                    leftover = full_audio[frames_per_chunk:]
+
+                    recorded_frames = [leftover] if len(leftover) > 0 else []
+                    frames_collected = len(leftover)
+
+                    self._save_and_dispatch(chunk)
+
             if recorded_frames:
-                audio_data = np.concatenate(recorded_frames, axis=0)
-                if len(audio_data) > SAMPLE_RATE * 3:  # only if > 3 seconds
-                    self._save_and_dispatch(audio_data)
+                full_audio = np.concatenate(recorded_frames)
+                if len(full_audio) > self.native_sample_rate * 3:
+                    self._save_and_dispatch(full_audio)
+
+            stream.stop_stream()
+            stream.close()
 
         except Exception as e:
             print(f"Audio capture error: {e}")
+        finally:
+            p.terminate()
 
     def _save_and_dispatch(self, audio_chunk):
-        """Save audio chunk to temp file and call the callback"""
         try:
-            # Create a temporary wav file
-            temp_file = tempfile.NamedTemporaryFile(
-                suffix='.wav',
-                delete=False
-            )
+            if self.native_sample_rate != TARGET_SAMPLE_RATE:
+                num_samples = int(len(audio_chunk) * TARGET_SAMPLE_RATE / self.native_sample_rate)
+                audio_chunk = resample(audio_chunk, num_samples)
+                audio_chunk = audio_chunk.astype(np.float32)
+
+            temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
             temp_path = temp_file.name
             temp_file.close()
 
-            # Write audio data to the temp file
-            sf.write(temp_path, audio_chunk, SAMPLE_RATE)
-
-            # Call the callback with the path to the temp file
+            sf.write(temp_path, audio_chunk, TARGET_SAMPLE_RATE)
             self.chunk_callback(temp_path)
 
         except Exception as e:
