@@ -60,6 +60,12 @@ class TutorialToNotesApp:
         )
         self.save_button.grid(row=0, column=2, padx=5)
 
+        self.history_button = tk.Button(
+            button_frame, text="📋 History", width=15, bg="#9C27B0", fg="white",
+            font=("Helvetica", 11, "bold"), command=self.open_history
+        )
+        self.history_button.grid(row=0, column=3, padx=5)
+
         transcript_label = tk.Label(self.root, text="Live Transcript:", font=("Helvetica", 11, "bold"))
         transcript_label.pack(anchor="w", padx=15, pady=(15, 0))
 
@@ -134,10 +140,11 @@ class TutorialToNotesApp:
 
         # Auto-save session to MongoDB
         title = datetime.now().strftime("Tutorial Notes - %Y-%m-%d %H:%M")
-        self.db.save_session(title=title,
-                             transcript=full_transcript,
-                             notes_markdown=self.generated_notes
-                            )
+        self.db.save_session(
+            title=title,
+            transcript=full_transcript,
+            notes_markdown=self.generated_notes
+        )
 
         self._update_status("Notes ready! Click 'Save PDF'.", "blue")
         self.root.after(0, self._enable_save)
@@ -161,6 +168,131 @@ class TutorialToNotesApp:
             self.pdf_exporter.export(self.generated_notes, file_path, title="Tutorial Notes")
             self._update_status(f"Saved to {os.path.basename(file_path)}", "green")
             messagebox.showinfo("Saved", f"Notes saved successfully to:\n{file_path}")
+
+    def open_history(self):
+        sessions = self.db.get_all_sessions()
+
+        if not sessions:
+            messagebox.showinfo("History", "No saved sessions yet.")
+            return
+
+        # Create history window
+        history_window = tk.Toplevel(self.root)
+        history_window.title("Session History")
+        history_window.geometry("800x600")
+
+        # Top label
+        tk.Label(
+            history_window, text="Saved Sessions",
+            font=("Helvetica", 14, "bold")
+        ).pack(pady=10)
+
+        # Frame to hold listbox + scrollbar
+        list_frame = tk.Frame(history_window)
+        list_frame.pack(padx=15, fill="both", expand=False)
+
+        scrollbar = tk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        session_listbox = tk.Listbox(
+            list_frame, font=("Helvetica", 11),
+            height=8, yscrollcommand=scrollbar.set,
+            selectmode=tk.SINGLE
+        )
+        session_listbox.pack(side=tk.LEFT, fill="both", expand=True)
+        scrollbar.config(command=session_listbox.yview)
+
+        # Populate listbox
+        for session in sessions:
+            session_listbox.insert(tk.END, session["title"])
+
+        # Notes preview label
+        tk.Label(
+            history_window, text="Notes Preview:",
+            font=("Helvetica", 11, "bold")
+        ).pack(anchor="w", padx=15, pady=(10, 0))
+
+        # Notes preview box
+        notes_box = scrolledtext.ScrolledText(
+            history_window, wrap=tk.WORD,
+            height=15, font=("Helvetica", 10)
+        )
+        notes_box.pack(padx=15, pady=5, fill="both", expand=True)
+        notes_box.config(state=tk.DISABLED)
+
+        # Buttons frame
+        btn_frame = tk.Frame(history_window)
+        btn_frame.pack(pady=10)
+
+        def on_select(event):
+            """Load selected session notes into preview box"""
+            selection = session_listbox.curselection()
+            if not selection:
+                return
+            selected_session = sessions[selection[0]]
+            notes_box.config(state=tk.NORMAL)
+            notes_box.delete(1.0, tk.END)
+            notes_box.insert(tk.END, selected_session["notes_markdown"])
+            notes_box.config(state=tk.DISABLED)
+
+        def export_selected():
+            """Export selected session notes to PDF"""
+            selection = session_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("No Selection", "Please select a session first.")
+                return
+
+            selected_session = sessions[selection[0]]
+
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                initialfile=f"{selected_session['title']}.pdf"
+            )
+
+            if file_path:
+                self.pdf_exporter.export(
+                    selected_session["notes_markdown"],
+                    file_path,
+                    title=selected_session["title"]
+                )
+                messagebox.showinfo("Saved", f"PDF saved to:\n{file_path}")
+
+        def delete_selected():
+            """Delete selected session from MongoDB"""
+            selection = session_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("No Selection", "Please select a session first.")
+                return
+
+            confirm = messagebox.askyesno(
+                "Delete Session",
+                "Are you sure you want to delete this session?"
+            )
+            if confirm:
+                selected_session = sessions[selection[0]]
+                self.db.delete_session(str(selected_session["_id"]))
+                sessions.pop(selection[0])
+                session_listbox.delete(selection[0])
+                notes_box.config(state=tk.NORMAL)
+                notes_box.delete(1.0, tk.END)
+                notes_box.config(state=tk.DISABLED)
+
+        session_listbox.bind("<<ListboxSelect>>", on_select)
+
+        tk.Button(
+            btn_frame, text="📄 Export PDF", width=15,
+            bg="#2196F3", fg="white",
+            font=("Helvetica", 11, "bold"),
+            command=export_selected
+        ).grid(row=0, column=0, padx=5)
+
+        tk.Button(
+            btn_frame, text="🗑 Delete", width=15,
+            bg="#f44336", fg="white",
+            font=("Helvetica", 11, "bold"),
+            command=delete_selected
+        ).grid(row=0, column=1, padx=5)
 
 
 if __name__ == "__main__":
