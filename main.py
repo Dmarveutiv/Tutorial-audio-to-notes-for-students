@@ -3,11 +3,13 @@ from tkinter import scrolledtext, messagebox, filedialog
 import threading
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 from audio_capture import AudioCapture
 from transcriber import Transcriber
 from note_generator import NoteGenerator
 from pdf_exporter import PDFExporter
+from db_handler import DBHandler
 
 # Load environment variables from .env (must be in the same folder as this file)
 load_dotenv()
@@ -26,6 +28,7 @@ class TutorialToNotesApp:
         self.note_generator = None
         self.pdf_exporter = PDFExporter()
         self.generated_notes = None
+        self.db = DBHandler()
 
         self._build_gui()
 
@@ -126,9 +129,15 @@ class TutorialToNotesApp:
             return
 
         self._update_status("Generating structured notes with Gemini...", "orange")
-
         self.note_generator = NoteGenerator(api_key=GEMINI_API_KEY)
         self.generated_notes = self.note_generator.generate_notes(full_transcript)
+
+        # Auto-save session to MongoDB
+        title = datetime.now().strftime("Tutorial Notes - %Y-%m-%d %H:%M")
+        self.db.save_session(title=title,
+                             transcript=full_transcript,
+                             notes_markdown=self.generated_notes
+                            )
 
         self._update_status("Notes ready! Click 'Save PDF'.", "blue")
         self.root.after(0, self._enable_save)
