@@ -16,11 +16,135 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("Gemini_Api_Key")
 
 
+# ---------------------------------------------------------------------------
+# Dark theme palette
+# ---------------------------------------------------------------------------
+FONT = "Segoe UI"
+
+BG_APP       = "#0B0E14"   # main window background
+BG_CARD      = "#131926"   # card background
+BG_SOFT      = "#18202F"   # inner widgets (text boxes, listbox)
+BORDER       = "#232D3F"   # subtle card borders
+TEXT_PRIMARY = "#E9EEF7"
+TEXT_MUTED   = "#8B98AB"
+
+ACCENT       = "#7C5CFF"   # brand violet
+GREEN        = "#22C55E"
+GREEN_HOVER  = "#34D273"
+RED          = "#EF4444"
+RED_HOVER    = "#F55C5C"
+BLUE         = "#3B82F6"
+BLUE_HOVER   = "#5897F8"
+PURPLE       = "#A855F7"
+PURPLE_HOVER = "#BC71F9"
+AMBER        = "#F59E0B"
+
+BTN_DISABLED    = "#242D3C"
+BTN_DISABLED_FG = "#5C6B7F"
+
+STATUS_COLORS = {
+    "gray":   TEXT_MUTED,
+    "orange": AMBER,
+    "green":  GREEN,
+    "blue":   BLUE,
+    "red":    RED,
+    "violet": ACCENT,
+}
+
+STATUS_SHORT = {
+    "gray":   "Idle",
+    "orange": "Working…",
+    "green":  "Listening",
+    "blue":   "Ready",
+    "red":    "Error",
+    "violet": "Busy",
+}
+
+
+def _rounded_points(x1, y1, x2, y2, r):
+    """Point list for a smoothed rounded rectangle on a Canvas."""
+    return [
+        x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
+        x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
+        x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
+    ]
+
+
+class RoundedButton(tk.Canvas):
+    """Modern rounded-corner button with hover / disabled states.
+
+    Exposes a minimal tk.Button-compatible interface (config(state=...),
+    config(text=...)) so it can drop into the existing app logic.
+    """
+
+    def __init__(self, master, text, command, bg, hover_bg,
+                 fg="#FFFFFF", width=150, height=46, radius=14,
+                 font=(FONT, 10, "bold")):
+        super().__init__(master, width=width, height=height,
+                         bg=master.cget("bg"), bd=0,
+                         highlightthickness=0, cursor="arrow")
+        self._command = command
+        self._bg = bg
+        self._hover_bg = hover_bg
+        self._fg = fg
+        self._enabled = True
+
+        self._rect = self.create_polygon(
+            _rounded_points(2, 2, width - 2, height - 2, radius),
+            smooth=True, fill=bg, outline=""
+        )
+        self._label = self.create_text(width / 2, height / 2, text=text,
+                                       fill=fg, font=font)
+
+        self.bind("<Enter>", self._on_enter)
+        self.bind("<Leave>", self._on_leave)
+        self.bind("<Button-1>", self._on_click)
+
+    # -- events -------------------------------------------------------------
+    def _on_enter(self, _event):
+        if self._enabled:
+            self.itemconfigure(self._rect, fill=self._hover_bg)
+            super().config(cursor="hand2")
+
+    def _on_leave(self, _event):
+        if self._enabled:
+            self.itemconfigure(self._rect, fill=self._bg)
+            super().config(cursor="arrow")
+
+    def _on_click(self, _event):
+        if self._enabled and self._command:
+            self._command()
+
+    # -- tk.Button-compatible bits ------------------------------------------
+    def config(self, cnf=None, **kw):
+        if "state" in kw:
+            self._set_enabled(kw.pop("state") != tk.DISABLED)
+        if "text" in kw:
+            self.itemconfigure(self._label, text=kw.pop("text"))
+        if kw or cnf:
+            return super().config(cnf, **kw)
+        return None
+
+    configure = config
+
+    def _set_enabled(self, enabled):
+        self._enabled = enabled
+        if enabled:
+            self.itemconfigure(self._rect, fill=self._bg)
+            self.itemconfigure(self._label, fill=self._fg)
+        else:
+            self.itemconfigure(self._rect, fill=BTN_DISABLED)
+            self.itemconfigure(self._label, fill=BTN_DISABLED_FG)
+            super().config(cursor="arrow")
+
+
 class TutorialToNotesApp:
     def __init__(self, root):
         self.root = root
         self.root.title("TutorialToNotes")
-        self.root.geometry("700x600")
+        self.root.geometry("800x740")
+        self.root.minsize(740, 680)
+        self.root.configure(bg=BG_APP)
 
         self.is_session_active = False
         self.audio_capture = None
@@ -30,53 +154,196 @@ class TutorialToNotesApp:
         self.generated_notes = None
         self.db = DBHandler()
 
+        self._record_seconds = 0
+        self._word_count = 0
+        self._status_color = TEXT_MUTED
+        self._pulse_on = False
+
         self._build_gui()
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    # -----------------------------------------------------------------------
+    # GUI construction
+    # -----------------------------------------------------------------------
     def _build_gui(self):
-        title_label = tk.Label(self.root, text="TutorialToNotes", font=("Helvetica", 18, "bold"))
-        title_label.pack(pady=10)
+        # ---- header --------------------------------------------------------
+        header = tk.Frame(self.root, bg=BG_APP)
+        header.pack(fill="x", padx=22, pady=(18, 4))
 
-        self.status_label = tk.Label(self.root, text="Status: Idle", font=("Helvetica", 11), fg="gray")
-        self.status_label.pack(pady=5)
+        title_block = tk.Frame(header, bg=BG_APP)
+        title_block.pack(side="left")
+        tk.Label(title_block, text="🎓 TutorialToNotes",
+                 font=(FONT, 20, "bold"), fg=TEXT_PRIMARY,
+                 bg=BG_APP).pack(anchor="w")
+        tk.Label(title_block, text="Turn any lecture into smart, structured notes ✨",
+                 font=(FONT, 10), fg=TEXT_MUTED, bg=BG_APP).pack(anchor="w")
 
-        button_frame = tk.Frame(self.root)
-        button_frame.pack(pady=10)
-
-        self.start_button = tk.Button(
-            button_frame, text="▶ Start", width=15, bg="#4CAF50", fg="white",
-            font=("Helvetica", 11, "bold"), command=self.start_session
+        # status pill (right side of header)
+        self.status_pill = tk.Canvas(header, width=150, height=36, bg=BG_APP,
+                                     bd=0, highlightthickness=0)
+        self.status_pill.pack(side="right", anchor="n", pady=8)
+        self.status_pill.create_polygon(
+            _rounded_points(1, 1, 149, 35, 17),
+            smooth=True, fill=BG_CARD, outline=BORDER
         )
-        self.start_button.grid(row=0, column=0, padx=5)
-
-        self.stop_button = tk.Button(
-            button_frame, text="■ Stop", width=15, bg="#f44336", fg="white",
-            font=("Helvetica", 11, "bold"), command=self.stop_session, state=tk.DISABLED
+        self._pill_dot = self.status_pill.create_oval(
+            14, 13, 26, 25, fill=TEXT_MUTED, outline=""
         )
-        self.stop_button.grid(row=0, column=1, padx=5)
-
-        self.save_button = tk.Button(
-            button_frame, text="💾 Save PDF", width=15, bg="#2196F3", fg="white",
-            font=("Helvetica", 11, "bold"), command=self.save_pdf, state=tk.DISABLED
+        self._pill_text = self.status_pill.create_text(
+            36, 18, anchor="w", text="Idle",
+            fill=TEXT_PRIMARY, font=(FONT, 10, "bold")
         )
-        self.save_button.grid(row=0, column=2, padx=5)
 
-        self.history_button = tk.Button(
-            button_frame, text="📋 History", width=15, bg="#9C27B0", fg="white",
-            font=("Helvetica", 11, "bold"), command=self.open_history
-        )
-        self.history_button.grid(row=0, column=3, padx=5)
+        # detailed status line under the header
+        self.status_detail = tk.Label(self.root, text="Ready when you are.",
+                                      font=(FONT, 9), fg=TEXT_MUTED, bg=BG_APP)
+        self.status_detail.pack(pady=(0, 4))
 
-        transcript_label = tk.Label(self.root, text="Live Transcript:", font=("Helvetica", 11, "bold"))
-        transcript_label.pack(anchor="w", padx=15, pady=(15, 0))
+        # ---- stats row -----------------------------------------------------
+        stats = tk.Frame(self.root, bg=BG_APP)
+        stats.pack(fill="x", padx=22, pady=6)
+
+        self.duration_value, _ = self._stat_card(stats, "⏱", "Session length", "00:00")
+        self.words_value, _ = self._stat_card(stats, "📝", "Words captured", "0")
+        self.saved_value, _ = self._stat_card(stats, "💾", "Saved sessions", "—")
+        self._refresh_saved_count()
+
+        # ---- transcript card ------------------------------------------------
+        transcript_card = tk.Frame(self.root, bg=BG_CARD,
+                                   highlightbackground=BORDER,
+                                   highlightthickness=1)
+        transcript_card.pack(fill="both", expand=True, padx=22, pady=8)
+
+        t_head = tk.Frame(transcript_card, bg=BG_CARD)
+        t_head.pack(fill="x", padx=12, pady=(10, 0))
+        tk.Label(t_head, text="🎧 Live Transcript",
+                 font=(FONT, 11, "bold"), fg=TEXT_PRIMARY,
+                 bg=BG_CARD).pack(side="left")
+
+        self.live_badge = tk.Label(t_head, text="● REC",
+                                   font=(FONT, 9, "bold"),
+                                   fg="#FFFFFF", bg=RED, padx=8, pady=1)
+        # (packed only while recording — see _set_live)
 
         self.transcript_box = scrolledtext.ScrolledText(
-            self.root, wrap=tk.WORD, height=20, font=("Helvetica", 10)
+            transcript_card, wrap=tk.WORD, font=(FONT, 10),
+            bg=BG_SOFT, fg=TEXT_PRIMARY,
+            insertbackground=TEXT_PRIMARY, selectbackground=ACCENT,
+            relief="flat", bd=0, padx=10, pady=8, height=16
         )
-        self.transcript_box.pack(padx=15, pady=5, fill="both", expand=True)
+        self.transcript_box.pack(padx=12, pady=10, fill="both", expand=True)
         self.transcript_box.config(state=tk.DISABLED)
+        try:
+            self.transcript_box.vbar.config(troughcolor=BG_CARD, bg=BORDER,
+                                            activebackground=ACCENT,
+                                            relief="flat", bd=0)
+        except Exception:
+            pass
 
+        # ---- control bar ----------------------------------------------------
+        controls = tk.Frame(self.root, bg=BG_APP)
+        controls.pack(fill="x", padx=22, pady=(6, 4))
+
+        self.start_button = RoundedButton(
+            controls, "▶  Start Session", self.start_session,
+            GREEN, GREEN_HOVER, width=170
+        )
+        self.start_button.pack(side="left", padx=5, expand=True)
+
+        self.stop_button = RoundedButton(
+            controls, "■  Stop & Notes", self.stop_session,
+            RED, RED_HOVER, width=160
+        )
+        self.stop_button.pack(side="left", padx=5, expand=True)
+        self.stop_button.config(state=tk.DISABLED)
+
+        self.save_button = RoundedButton(
+            controls, "💾  Save PDF", self.save_pdf,
+            BLUE, BLUE_HOVER, width=140
+        )
+        self.save_button.pack(side="left", padx=5, expand=True)
+        self.save_button.config(state=tk.DISABLED)
+
+        self.history_button = RoundedButton(
+            controls, "📚  History", self.open_history,
+            PURPLE, PURPLE_HOVER, width=130
+        )
+        self.history_button.pack(side="left", padx=5, expand=True)
+
+        # ---- footer ----------------------------------------------------------
+        tk.Label(
+            self.root,
+            text="🎙️ Whisper listens on-device   ·   🤖 Gemini writes your notes   ·   🍃 MongoDB keeps your history",
+            font=(FONT, 9), fg=TEXT_MUTED, bg=BG_APP
+        ).pack(pady=(0, 12))
+
+    def _stat_card(self, parent, icon, caption, initial):
+        card = tk.Frame(parent, bg=BG_CARD,
+                        highlightbackground=BORDER, highlightthickness=1)
+        card.pack(side="left", fill="both", expand=True, padx=4)
+        value = tk.Label(card, text=initial, font=(FONT, 15, "bold"),
+                         fg=TEXT_PRIMARY, bg=BG_CARD)
+        value.pack(pady=(10, 0))
+        tk.Label(card, text=f"{icon}  {caption}", font=(FONT, 9),
+                 fg=TEXT_MUTED, bg=BG_CARD).pack(pady=(0, 10))
+        return value, card
+
+    # -----------------------------------------------------------------------
+    # Status / stats helpers
+    # -----------------------------------------------------------------------
     def _update_status(self, text, color="gray"):
-        self.status_label.config(text=f"Status: {text}", fg=color)
+        """Thread-safe status update (safe to call from worker threads)."""
+        def apply():
+            c = STATUS_COLORS.get(color, TEXT_MUTED)
+            self._status_color = c
+            self.status_pill.itemconfigure(self._pill_text,
+                                           text=STATUS_SHORT.get(color, "Status"))
+            self.status_pill.itemconfigure(self._pill_dot, fill=c)
+            detail_color = c if color in ("orange", "blue", "red") else TEXT_MUTED
+            self.status_detail.config(text=text, fg=detail_color)
+        self.root.after(0, apply)
+
+    def _refresh_saved_count(self):
+        def apply():
+            try:
+                count = len(self.db.get_all_sessions())
+                self.saved_value.config(text=str(count))
+            except Exception:
+                self.saved_value.config(text="—")
+        self.root.after(0, apply)
+
+    def _set_live(self, visible):
+        if visible:
+            self.live_badge.pack(side="left", padx=10)
+        else:
+            self.live_badge.pack_forget()
+
+    def _start_timer(self):
+        self._record_seconds = 0
+        self.duration_value.config(text="00:00")
+        self._tick()
+
+    def _tick(self):
+        if not self.is_session_active:
+            return
+        self._record_seconds += 1
+        m, s = divmod(self._record_seconds, 60)
+        h, m = divmod(m, 60)
+        text = f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+        self.duration_value.config(text=text)
+        self.root.after(1000, self._tick)
+
+    def _start_pulse(self):
+        self._pulse_on = False
+        self._pulse()
+
+    def _pulse(self):
+        if not self.is_session_active:
+            return
+        self._pulse_on = not self._pulse_on
+        fill = self._status_color if self._pulse_on else BG_CARD
+        self.status_pill.itemconfigure(self._pill_dot, fill=fill)
+        self.root.after(550, self._pulse)
 
     def _append_transcript(self, text):
         def update():
@@ -84,13 +351,18 @@ class TutorialToNotesApp:
             self.transcript_box.insert(tk.END, text + " ")
             self.transcript_box.see(tk.END)
             self.transcript_box.config(state=tk.DISABLED)
+            self._word_count += len(text.split())
+            self.words_value.config(text=str(self._word_count))
         self.root.after(0, update)
 
+    # -----------------------------------------------------------------------
+    # Session flow (logic unchanged from the original app)
+    # -----------------------------------------------------------------------
     def start_session(self):
         if not GEMINI_API_KEY:
             messagebox.showerror(
                 "Missing API Key",
-                "GEMINI_API_KEY not found.\n\nMake sure a .env file exists in this folder with:\nGEMINI_API_KEY=your_key_here"
+                "Gemini_Api_Key not found.\n\nMake sure a .env file exists in this folder with:\nGemini_Api_Key=your_key_here"
             )
             return
 
@@ -102,6 +374,12 @@ class TutorialToNotesApp:
         self.transcript_box.config(state=tk.NORMAL)
         self.transcript_box.delete(1.0, tk.END)
         self.transcript_box.config(state=tk.DISABLED)
+
+        self._word_count = 0
+        self.words_value.config(text="0")
+        self._set_live(True)
+        self._start_timer()
+        self._start_pulse()
 
         self._update_status("Loading Whisper model...", "orange")
         threading.Thread(target=self._init_and_start, daemon=True).start()
@@ -118,6 +396,7 @@ class TutorialToNotesApp:
     def stop_session(self):
         self.is_session_active = False
         self.stop_button.config(state=tk.DISABLED)
+        self._set_live(False)
         self._update_status("Stopping and generating notes...", "orange")
         threading.Thread(target=self._stop_and_generate, daemon=True).start()
 
@@ -145,6 +424,7 @@ class TutorialToNotesApp:
             transcript=full_transcript,
             notes_markdown=self.generated_notes
         )
+        self._refresh_saved_count()
 
         self._update_status("Notes ready! Click 'Save PDF'.", "blue")
         self.root.after(0, self._enable_save)
@@ -169,60 +449,91 @@ class TutorialToNotesApp:
             self._update_status(f"Saved to {os.path.basename(file_path)}", "green")
             messagebox.showinfo("Saved", f"Notes saved successfully to:\n{file_path}")
 
+    # -----------------------------------------------------------------------
+    # History window
+    # -----------------------------------------------------------------------
     def open_history(self):
-        sessions = self.db.get_all_sessions()
+        try:
+            sessions = self.db.get_all_sessions()
+        except Exception as exc:
+            messagebox.showerror(
+                "Database Error",
+                f"Could not load sessions from MongoDB.\n\n{exc}\n\nIs 'docker compose up' running?"
+            )
+            return
 
         if not sessions:
             messagebox.showinfo("History", "No saved sessions yet.")
             return
 
-        # Create history window
         history_window = tk.Toplevel(self.root)
         history_window.title("Session History")
-        history_window.geometry("800x600")
+        history_window.geometry("840x640")
+        history_window.minsize(720, 520)
+        history_window.configure(bg=BG_APP)
+        history_window.transient(self.root)
 
-        # Top label
-        tk.Label(
-            history_window, text="Saved Sessions",
-            font=("Helvetica", 14, "bold")
-        ).pack(pady=10)
+        # header
+        header = tk.Frame(history_window, bg=BG_APP)
+        header.pack(fill="x", padx=20, pady=(16, 8))
+        tk.Label(header, text="📚 Session History",
+                 font=(FONT, 16, "bold"), fg=TEXT_PRIMARY,
+                 bg=BG_APP).pack(side="left")
+        tk.Label(header, text=f"{len(sessions)} saved",
+                 font=(FONT, 10), fg=TEXT_MUTED,
+                 bg=BG_APP).pack(side="left", padx=10, pady=(4, 0))
 
-        # Frame to hold listbox + scrollbar
-        list_frame = tk.Frame(history_window)
-        list_frame.pack(padx=15, fill="both", expand=False)
+        # session list card
+        list_card = tk.Frame(history_window, bg=BG_CARD,
+                             highlightbackground=BORDER, highlightthickness=1)
+        list_card.pack(fill="x", padx=20, pady=6)
 
-        scrollbar = tk.Scrollbar(list_frame)
+        list_frame = tk.Frame(list_card, bg=BG_CARD)
+        list_frame.pack(padx=10, pady=10, fill="both", expand=True)
+
+        scrollbar = tk.Scrollbar(list_frame, troughcolor=BG_CARD, bg=BORDER,
+                                 activebackground=ACCENT, relief="flat", bd=0)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         session_listbox = tk.Listbox(
-            list_frame, font=("Helvetica", 11),
-            height=8, yscrollcommand=scrollbar.set,
-            selectmode=tk.SINGLE
+            list_frame, font=(FONT, 11), height=7,
+            bg=BG_SOFT, fg=TEXT_PRIMARY,
+            selectbackground=ACCENT, selectforeground="#FFFFFF",
+            highlightthickness=0, relief="flat", bd=0,
+            activestyle="none",
+            yscrollcommand=scrollbar.set, selectmode=tk.SINGLE
         )
         session_listbox.pack(side=tk.LEFT, fill="both", expand=True)
         scrollbar.config(command=session_listbox.yview)
 
-        # Populate listbox
         for session in sessions:
-            session_listbox.insert(tk.END, session["title"])
+            session_listbox.insert(tk.END, "  " + session["title"])
 
-        # Notes preview label
-        tk.Label(
-            history_window, text="Notes Preview:",
-            font=("Helvetica", 11, "bold")
-        ).pack(anchor="w", padx=15, pady=(10, 0))
+        # notes preview card
+        preview_card = tk.Frame(history_window, bg=BG_CARD,
+                                highlightbackground=BORDER, highlightthickness=1)
+        preview_card.pack(fill="both", expand=True, padx=20, pady=6)
+        tk.Label(preview_card, text="📝 Notes Preview",
+                 font=(FONT, 11, "bold"), fg=TEXT_PRIMARY,
+                 bg=BG_CARD).pack(anchor="w", padx=12, pady=(10, 0))
 
-        # Notes preview box
         notes_box = scrolledtext.ScrolledText(
-            history_window, wrap=tk.WORD,
-            height=15, font=("Helvetica", 10)
+            preview_card, wrap=tk.WORD, font=(FONT, 10),
+            bg=BG_SOFT, fg=TEXT_PRIMARY,
+            insertbackground=TEXT_PRIMARY, selectbackground=ACCENT,
+            relief="flat", bd=0, padx=10, pady=8, height=14
         )
-        notes_box.pack(padx=15, pady=5, fill="both", expand=True)
+        notes_box.pack(padx=12, pady=10, fill="both", expand=True)
         notes_box.config(state=tk.DISABLED)
+        try:
+            notes_box.vbar.config(troughcolor=BG_CARD, bg=BORDER,
+                                  activebackground=ACCENT, relief="flat", bd=0)
+        except Exception:
+            pass
 
-        # Buttons frame
-        btn_frame = tk.Frame(history_window)
-        btn_frame.pack(pady=10)
+        # buttons
+        btn_frame = tk.Frame(history_window, bg=BG_APP)
+        btn_frame.pack(pady=(6, 16))
 
         def on_select(event):
             """Load selected session notes into preview box"""
@@ -277,22 +588,32 @@ class TutorialToNotesApp:
                 notes_box.config(state=tk.NORMAL)
                 notes_box.delete(1.0, tk.END)
                 notes_box.config(state=tk.DISABLED)
+                self._refresh_saved_count()
 
         session_listbox.bind("<<ListboxSelect>>", on_select)
 
-        tk.Button(
-            btn_frame, text="📄 Export PDF", width=15,
-            bg="#2196F3", fg="white",
-            font=("Helvetica", 11, "bold"),
-            command=export_selected
-        ).grid(row=0, column=0, padx=5)
+        RoundedButton(
+            btn_frame, "📄  Export PDF", export_selected,
+            BLUE, BLUE_HOVER, width=170
+        ).grid(row=0, column=0, padx=6)
 
-        tk.Button(
-            btn_frame, text="🗑 Delete", width=15,
-            bg="#f44336", fg="white",
-            font=("Helvetica", 11, "bold"),
-            command=delete_selected
-        ).grid(row=0, column=1, padx=5)
+        RoundedButton(
+            btn_frame, "🗑  Delete", delete_selected,
+            RED, RED_HOVER, width=140
+        ).grid(row=0, column=1, padx=6)
+
+    # -----------------------------------------------------------------------
+    # Shutdown
+    # -----------------------------------------------------------------------
+    def _on_close(self):
+        try:
+            if self.audio_capture:
+                self.audio_capture.stop()
+            if self.transcriber:
+                self.transcriber.stop()
+        except Exception:
+            pass
+        self.root.destroy()
 
 
 if __name__ == "__main__":
