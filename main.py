@@ -175,7 +175,7 @@ class TutorialToNotesApp:
         tk.Label(title_block, text="🎓 TutorialToNotes",
                  font=(FONT, 20, "bold"), fg=TEXT_PRIMARY,
                  bg=BG_APP).pack(anchor="w")
-        tk.Label(title_block, text="Turn any online lecture/Tutorial into summarized, structured notes ✨",
+        tk.Label(title_block, text="Turn any online Lecture/Tutorial into summarized, structured notes ✨",
                  font=(FONT, 10), fg=TEXT_MUTED, bg=BG_APP).pack(anchor="w")
 
         # status pill (right side of header)
