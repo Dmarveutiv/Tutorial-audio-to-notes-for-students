@@ -175,7 +175,7 @@ class TutorialToNotesApp:
         tk.Label(title_block, text="🎓 TutorialToNotes",
                  font=(FONT, 20, "bold"), fg=TEXT_PRIMARY,
                  bg=BG_APP).pack(anchor="w")
-        tk.Label(title_block, text="Turn any lecture into smart, structured notes ✨",
+        tk.Label(title_block, text="Turn any online lecture/Tutorial into summarized, structured notes ✨",
                  font=(FONT, 10), fg=TEXT_MUTED, bg=BG_APP).pack(anchor="w")
 
         # status pill (right side of header)
@@ -273,7 +273,7 @@ class TutorialToNotesApp:
         # ---- footer ----------------------------------------------------------
         tk.Label(
             self.root,
-            text="🎙️ Whisper listens on-device   ·   🤖 Gemini writes your notes   ·   🍃 MongoDB keeps your history",
+            text="🎙️ Listens on-device   ·   🤖 Writes your notes   ·   🍃 Keeps note history",
             font=(FONT, 9), fg=TEXT_MUTED, bg=BG_APP
         ).pack(pady=(0, 12))
 
