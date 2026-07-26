@@ -3,6 +3,7 @@ from tkinter import scrolledtext, messagebox, filedialog
 import threading
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 from audio_capture import AudioCapture
 from transcriber import Transcriber
@@ -77,6 +78,20 @@ class TutorialToNotesApp:
             self.transcript_box.config(state=tk.DISABLED)
         self.root.after(0, update)
 
+    # -----------------------------------------------------------------------
+    # Title extraction
+    # -----------------------------------------------------------------------
+    def _extract_title(self, notes_markdown):
+        """Extract the first # heading from Gemini's notes as the session title"""
+        for line in notes_markdown.split("\n"):
+            line = line.strip()
+            if line.startswith("# "):
+                return line[2:].strip()
+        return datetime.now().strftime("Tutorial Notes - %Y-%m-%d %H:%M")
+
+    # -----------------------------------------------------------------------
+    # Session flow
+    # -----------------------------------------------------------------------
     def start_session(self):
         if not GEMINI_API_KEY:
             messagebox.showerror(
@@ -142,14 +157,16 @@ class TutorialToNotesApp:
             messagebox.showwarning("No Notes", "No notes have been generated yet.")
             return
 
+        title = self._extract_title(self.generated_notes)
+
         file_path = filedialog.asksaveasfilename(
             defaultextension=".pdf",
             filetypes=[("PDF files", "*.pdf")],
-            initialfile="tutorial_notes.pdf"
+            initialfile=f"{title}.pdf"
         )
 
         if file_path:
-            self.pdf_exporter.export(self.generated_notes, file_path, title="Tutorial Notes")
+            self.pdf_exporter.export(self.generated_notes, file_path, title=title)
             self._update_status(f"Saved to {os.path.basename(file_path)}", "green")
             messagebox.showinfo("Saved", f"Notes saved successfully to:\n{file_path}")
 
