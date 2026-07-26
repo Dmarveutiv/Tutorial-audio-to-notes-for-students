@@ -14,88 +14,136 @@ from db_handler import DBHandler
 load_dotenv()
 GEMINI_API_KEY = os.getenv("Gemini_Api_Key")
 
-FONT = "Segoe UI"
-BG_APP       = "#0B0E14"
-BG_CARD      = "#131926"
-BG_SOFT      = "#18202F"
-BORDER       = "#232D3F"
-TEXT_PRIMARY = "#E9EEF7"
-TEXT_MUTED   = "#8B98AB"
-ACCENT       = "#7C5CFF"
-GREEN        = "#22C55E"
-GREEN_HOVER  = "#34D273"
-RED          = "#EF4444"
-RED_HOVER    = "#F55C5C"
-BLUE         = "#3B82F6"
-BLUE_HOVER   = "#5897F8"
-PURPLE       = "#A855F7"
-PURPLE_HOVER = "#BC71F9"
-AMBER        = "#F59E0B"
-BTN_DISABLED    = "#242D3C"
-BTN_DISABLED_FG = "#5C6B7F"
+# ---------------------------------------------------------------------------
+# Typography
+# ---------------------------------------------------------------------------
+FONT_FAMILY   = "Segoe UI"
+FONT_TITLE    = (FONT_FAMILY, 18, "bold")
+FONT_SUBTITLE = (FONT_FAMILY, 9)
+FONT_HEADING  = (FONT_FAMILY, 11, "bold")
+FONT_BODY     = (FONT_FAMILY, 10)
+FONT_SMALL    = (FONT_FAMILY, 9)
+FONT_BTN      = (FONT_FAMILY, 10, "bold")
+FONT_STAT     = (FONT_FAMILY, 15, "bold")
+FONT_PILL     = (FONT_FAMILY, 10, "bold")
+FONT_BADGE    = (FONT_FAMILY, 9,  "bold")
 
-STATUS_COLORS = {
-    "gray":   TEXT_MUTED,
-    "orange": AMBER,
-    "green":  GREEN,
-    "blue":   BLUE,
-    "red":    RED,
-    "violet": ACCENT,
+# ---------------------------------------------------------------------------
+# Themes
+# ---------------------------------------------------------------------------
+THEMES = {
+    "dracula": {
+        "name":           "dracula",
+        "bg_app":         "#282A36",
+        "bg_card":        "#1E2029",
+        "bg_input":       "#21222C",
+        "border":         "#44475A",
+        "text_primary":   "#F8F8F2",
+        "text_muted":     "#6272A4",
+        "text_heading":   "#BD93F9",
+        "accent":         "#BD93F9",
+        "green":          "#50FA7B",
+        "green_hover":    "#69FF90",
+        "red":            "#FF5555",
+        "red_hover":      "#FF7070",
+        "blue":           "#8BE9FD",
+        "blue_hover":     "#A5EFFE",
+        "purple":         "#FF79C6",
+        "purple_hover":   "#FF9DD5",
+        "amber":          "#FFB86C",
+        "btn_disabled":   "#3A3C4E",
+        "btn_dis_fg":     "#6272A4",
+        "scrollbar":      "#44475A",
+        "select_bg":      "#44475A",
+        "pill_bg":        "#1E2029",
+        "badge_bg":       "#FF5555",
+        "toggle_label":   "☀  Light",
+    },
+    "light": {
+        "name":           "light",
+        "bg_app":         "#F5F6FA",
+        "bg_card":        "#FFFFFF",
+        "bg_input":       "#F0F1F5",
+        "border":         "#D1D5DB",
+        "text_primary":   "#111827",
+        "text_muted":     "#6B7280",
+        "text_heading":   "#1D4ED8",
+        "accent":         "#4F46E5",
+        "green":          "#16A34A",
+        "green_hover":    "#15803D",
+        "red":            "#DC2626",
+        "red_hover":      "#B91C1C",
+        "blue":           "#2563EB",
+        "blue_hover":     "#1D4ED8",
+        "purple":         "#7C3AED",
+        "purple_hover":   "#6D28D9",
+        "amber":          "#D97706",
+        "btn_disabled":   "#E5E7EB",
+        "btn_dis_fg":     "#9CA3AF",
+        "scrollbar":      "#D1D5DB",
+        "select_bg":      "#C7D2FE",
+        "pill_bg":        "#FFFFFF",
+        "badge_bg":       "#DC2626",
+        "toggle_label":   "🌙  Dark",
+    },
 }
 
-STATUS_SHORT = {
-    "gray":   "Idle",
-    "orange": "Working…",
-    "green":  "Listening",
-    "blue":   "Ready",
-    "red":    "Error",
-    "violet": "Busy",
-}
+# Active theme — mutable dict updated on toggle
+T = dict(THEMES["dracula"])
 
 
 def _rounded_points(x1, y1, x2, y2, r):
     return [
-        x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
-        x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
-        x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
+        x1+r, y1,  x2-r, y1,  x2, y1,  x2, y1+r,
+        x2, y2-r,  x2, y2,    x2-r, y2, x1+r, y2,
+        x1, y2,    x1, y2-r,  x1, y1+r, x1, y1,
     ]
 
 
+# ---------------------------------------------------------------------------
+# RoundedButton — theme-aware
+# ---------------------------------------------------------------------------
 class RoundedButton(tk.Canvas):
-    def __init__(self, master, text, command, bg, hover_bg,
-                 fg="#FFFFFF", width=150, height=46, radius=14,
-                 font=(FONT, 10, "bold")):
+    def __init__(self, master, text, command, color_key,
+                 fg="#FFFFFF", width=150, height=44, radius=12):
         super().__init__(master, width=width, height=height,
-                         bg=master.cget("bg"), bd=0,
-                         highlightthickness=0, cursor="arrow")
-        self._command = command
-        self._bg = bg
-        self._hover_bg = hover_bg
-        self._fg = fg
-        self._enabled = True
+                         highlightthickness=0, cursor="arrow", bd=0)
+        self._command   = command
+        self._color_key = color_key   # e.g. "green" → T["green"]
+        self._fg        = fg
+        self._enabled   = True
+        self._text      = text
 
-        self._rect = self.create_polygon(
-            _rounded_points(2, 2, width - 2, height - 2, radius),
-            smooth=True, fill=bg, outline=""
+        self._rect  = self.create_polygon(
+            _rounded_points(2, 2, width-2, height-2, radius),
+            smooth=True, fill=T[color_key], outline=""
         )
-        self._label = self.create_text(width / 2, height / 2, text=text,
-                                       fill=fg, font=font)
-
-        self.bind("<Enter>", self._on_enter)
-        self.bind("<Leave>", self._on_leave)
+        self._label = self.create_text(
+            width/2, height/2, text=text,
+            fill=fg, font=FONT_BTN
+        )
+        self.bind("<Enter>",    self._on_enter)
+        self.bind("<Leave>",    self._on_leave)
         self.bind("<Button-1>", self._on_click)
+        self._sync_canvas_bg()
 
-    def _on_enter(self, _event):
+    def _sync_canvas_bg(self):
+        try:
+            self.configure(bg=self.master.cget("bg"))
+        except Exception:
+            pass
+
+    def _on_enter(self, _e):
         if self._enabled:
-            self.itemconfigure(self._rect, fill=self._hover_bg)
+            self.itemconfigure(self._rect, fill=T[self._color_key + "_hover"])
             super().config(cursor="hand2")
 
-    def _on_leave(self, _event):
+    def _on_leave(self, _e):
         if self._enabled:
-            self.itemconfigure(self._rect, fill=self._bg)
+            self.itemconfigure(self._rect, fill=T[self._color_key])
             super().config(cursor="arrow")
 
-    def _on_click(self, _event):
+    def _on_click(self, _e):
         if self._enabled and self._command:
             self._command()
 
@@ -113,162 +161,321 @@ class RoundedButton(tk.Canvas):
     def _set_enabled(self, enabled):
         self._enabled = enabled
         if enabled:
-            self.itemconfigure(self._rect, fill=self._bg)
+            self.itemconfigure(self._rect,  fill=T[self._color_key])
             self.itemconfigure(self._label, fill=self._fg)
         else:
-            self.itemconfigure(self._rect, fill=BTN_DISABLED)
-            self.itemconfigure(self._label, fill=BTN_DISABLED_FG)
+            self.itemconfigure(self._rect,  fill=T["btn_disabled"])
+            self.itemconfigure(self._label, fill=T["btn_dis_fg"])
             super().config(cursor="arrow")
 
+    def apply_theme(self):
+        """Called when theme switches — repaint colours."""
+        self._sync_canvas_bg()
+        if self._enabled:
+            self.itemconfigure(self._rect,  fill=T[self._color_key])
+            self.itemconfigure(self._label, fill=self._fg)
+        else:
+            self.itemconfigure(self._rect,  fill=T["btn_disabled"])
+            self.itemconfigure(self._label, fill=T["btn_dis_fg"])
 
+
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
 class TutorialToNotesApp:
     def __init__(self, root):
         self.root = root
         self.root.title("TutorialToNotes")
-        self.root.geometry("800x740")
-        self.root.minsize(740, 680)
-        self.root.configure(bg=BG_APP)
+        self.root.geometry("820x760")
+        self.root.minsize(760, 700)
 
         self.is_session_active = False
-        self.audio_capture = None
-        self.transcriber = None
+        self.audio_capture  = None
+        self.transcriber    = None
         self.note_generator = None
-        self.pdf_exporter = PDFExporter()
+        self.pdf_exporter   = PDFExporter()
         self.generated_notes = None
         self.db = DBHandler()
 
         self._record_seconds = 0
-        self._word_count = 0
-        self._status_color = TEXT_MUTED
-        self._pulse_on = False
+        self._pulse_on       = False
+
+        # collect every widget that needs repainting on theme switch
+        self._themed_widgets: list = []
+        self._rounded_buttons: list[RoundedButton] = []
 
         self._build_gui()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    # -----------------------------------------------------------------------
+    # GUI build
+    # -----------------------------------------------------------------------
     def _build_gui(self):
-        header = tk.Frame(self.root, bg=BG_APP)
-        header.pack(fill="x", padx=22, pady=(18, 4))
+        self.root.configure(bg=T["bg_app"])
 
-        title_block = tk.Frame(header, bg=BG_APP)
-        title_block.pack(side="left")
-        tk.Label(title_block, text="🎓 TutorialToNotes",
-                 font=(FONT, 20, "bold"), fg=TEXT_PRIMARY,
-                 bg=BG_APP).pack(anchor="w")
-        tk.Label(title_block, text="Turn any online Lecture/Tutorial into summarized, structured notes ✨",
-                 font=(FONT, 10), fg=TEXT_MUTED, bg=BG_APP).pack(anchor="w")
+        # ── header bar ──────────────────────────────────────────────────────
+        self._header = tk.Frame(self.root, bg=T["bg_app"])
+        self._header.pack(fill="x", padx=24, pady=(20, 2))
+        self._themed_widgets.append((self._header, "frame", "bg_app"))
 
-        self.status_pill = tk.Canvas(header, width=150, height=36, bg=BG_APP,
-                                     bd=0, highlightthickness=0)
-        self.status_pill.pack(side="right", anchor="n", pady=8)
-        self.status_pill.create_polygon(
-            _rounded_points(1, 1, 149, 35, 17),
-            smooth=True, fill=BG_CARD, outline=BORDER
+        self._title_block = tk.Frame(self._header, bg=T["bg_app"])
+        self._title_block.pack(side="left")
+        self._themed_widgets.append((self._title_block, "frame", "bg_app"))
+
+        self._lbl_title = tk.Label(
+            self._title_block, text="🎓  TutorialToNotes",
+            font=FONT_TITLE, fg=T["text_heading"], bg=T["bg_app"]
         )
-        self._pill_dot = self.status_pill.create_oval(
-            14, 13, 26, 25, fill=TEXT_MUTED, outline=""
+        self._lbl_title.pack(anchor="w")
+        self._themed_widgets.append((self._lbl_title, "label", "bg_app", "text_heading"))
+
+        self._lbl_sub = tk.Label(
+            self._title_block,
+            text="Capture any lecture or tutorial — get clean, structured study notes.",
+            font=FONT_SUBTITLE, fg=T["text_muted"], bg=T["bg_app"]
         )
-        self._pill_text = self.status_pill.create_text(
+        self._lbl_sub.pack(anchor="w", pady=(2, 0))
+        self._themed_widgets.append((self._lbl_sub, "label", "bg_app", "text_muted"))
+
+        # theme toggle (top-right)
+        self._toggle_btn = tk.Label(
+            self._header, text=T["toggle_label"],
+            font=FONT_SMALL, fg=T["text_muted"], bg=T["bg_app"],
+            cursor="hand2", padx=6, pady=4,
+            relief="flat"
+        )
+        self._toggle_btn.pack(side="right", anchor="n", pady=6)
+        self._toggle_btn.bind("<Button-1>", lambda _e: self._toggle_theme())
+        self._themed_widgets.append((self._toggle_btn, "label", "bg_app", "text_muted"))
+
+        # status pill
+        self._pill_canvas = tk.Canvas(
+            self._header, width=152, height=36,
+            bg=T["bg_app"], bd=0, highlightthickness=0
+        )
+        self._pill_canvas.pack(side="right", anchor="n", pady=8, padx=(0, 10))
+        self._themed_widgets.append((self._pill_canvas, "canvas", "bg_app"))
+
+        self._pill_bg = self._pill_canvas.create_polygon(
+            _rounded_points(1, 1, 151, 35, 17),
+            smooth=True, fill=T["pill_bg"], outline=T["border"]
+        )
+        self._pill_dot = self._pill_canvas.create_oval(
+            14, 13, 26, 25, fill=T["text_muted"], outline=""
+        )
+        self._pill_text = self._pill_canvas.create_text(
             36, 18, anchor="w", text="Idle",
-            fill=TEXT_PRIMARY, font=(FONT, 10, "bold")
+            fill=T["text_primary"], font=FONT_PILL
         )
 
-        self.status_detail = tk.Label(self.root, text="Ready when you are.",
-                                      font=(FONT, 9), fg=TEXT_MUTED, bg=BG_APP)
-        self.status_detail.pack(pady=(0, 4))
+        # status detail line
+        self._lbl_status = tk.Label(
+            self.root, text="Ready when you are.",
+            font=FONT_SMALL, fg=T["text_muted"], bg=T["bg_app"]
+        )
+        self._lbl_status.pack(pady=(0, 6))
+        self._themed_widgets.append((self._lbl_status, "label", "bg_app", "text_muted"))
 
-        stats = tk.Frame(self.root, bg=BG_APP)
-        stats.pack(fill="x", padx=22, pady=6)
+        # ── stat cards ──────────────────────────────────────────────────────
+        self._stats_frame = tk.Frame(self.root, bg=T["bg_app"])
+        self._stats_frame.pack(fill="x", padx=24, pady=4)
+        self._themed_widgets.append((self._stats_frame, "frame", "bg_app"))
 
-        self.duration_value, _ = self._stat_card(stats, "⏱", "Session length", "00:00")
-        self.words_value, _ = self._stat_card(stats, "📝", "Words captured", "0")
-        self.saved_value, _ = self._stat_card(stats, "💾", "Saved sessions", "—")
+        self.duration_value = self._stat_card(self._stats_frame, "⏱", "Session length", "00:00")
+        self.saved_value    = self._stat_card(self._stats_frame, "💾", "Saved sessions",  "—")
         self._refresh_saved_count()
 
-        transcript_card = tk.Frame(self.root, bg=BG_CARD,
-                                   highlightbackground=BORDER,
-                                   highlightthickness=1)
-        transcript_card.pack(fill="both", expand=True, padx=22, pady=8)
+        # ── transcript card ─────────────────────────────────────────────────
+        self._tx_card = tk.Frame(
+            self.root, bg=T["bg_card"],
+            highlightbackground=T["border"], highlightthickness=1
+        )
+        self._tx_card.pack(fill="both", expand=True, padx=24, pady=8)
+        self._themed_widgets.append((self._tx_card, "frame_border", "bg_card", "border"))
 
-        t_head = tk.Frame(transcript_card, bg=BG_CARD)
-        t_head.pack(fill="x", padx=12, pady=(10, 0))
-        tk.Label(t_head, text="🎧 Live Transcript",
-                 font=(FONT, 11, "bold"), fg=TEXT_PRIMARY,
-                 bg=BG_CARD).pack(side="left")
+        tx_head = tk.Frame(self._tx_card, bg=T["bg_card"])
+        tx_head.pack(fill="x", padx=14, pady=(12, 0))
+        self._themed_widgets.append((tx_head, "frame", "bg_card"))
 
-        self.live_badge = tk.Label(t_head, text="● REC",
-                                   font=(FONT, 9, "bold"),
-                                   fg="#FFFFFF", bg=RED, padx=8, pady=1)
+        self._lbl_tx_head = tk.Label(
+            tx_head, text="🎧  Live Transcript",
+            font=FONT_HEADING, fg=T["text_primary"], bg=T["bg_card"]
+        )
+        self._lbl_tx_head.pack(side="left")
+        self._themed_widgets.append((self._lbl_tx_head, "label", "bg_card", "text_primary"))
+
+        self.live_badge = tk.Label(
+            tx_head, text="  ● REC  ",
+            font=FONT_BADGE, fg="#FFFFFF",
+            bg=T["badge_bg"], pady=2
+        )
+        # packed/unpacked dynamically
 
         self.transcript_box = scrolledtext.ScrolledText(
-            transcript_card, wrap=tk.WORD, font=(FONT, 10),
-            bg=BG_SOFT, fg=TEXT_PRIMARY,
-            insertbackground=TEXT_PRIMARY, selectbackground=ACCENT,
-            relief="flat", bd=0, padx=10, pady=8, height=16
+            self._tx_card, wrap=tk.WORD, font=FONT_BODY,
+            bg=T["bg_input"], fg=T["text_primary"],
+            insertbackground=T["text_primary"],
+            selectbackground=T["select_bg"],
+            relief="flat", bd=0, padx=12, pady=10, height=16
         )
-        self.transcript_box.pack(padx=12, pady=10, fill="both", expand=True)
+        self.transcript_box.pack(padx=14, pady=10, fill="both", expand=True)
         self.transcript_box.config(state=tk.DISABLED)
+        self._themed_widgets.append((self.transcript_box, "text", "bg_input", "text_primary"))
+        self._style_scrollbar(self.transcript_box)
+
+        # ── control bar ─────────────────────────────────────────────────────
+        self._ctrl = tk.Frame(self.root, bg=T["bg_app"])
+        self._ctrl.pack(fill="x", padx=24, pady=(4, 4))
+        self._themed_widgets.append((self._ctrl, "frame", "bg_app"))
+
+        self.start_button = self._make_btn(
+            self._ctrl, "▶   Start Session", self.start_session, "green", width=176
+        )
+        self.stop_button = self._make_btn(
+            self._ctrl, "■   Stop & Notes", self.stop_session, "red", width=164
+        )
+        self.stop_button.config(state=tk.DISABLED)
+
+        self.save_button = self._make_btn(
+            self._ctrl, "💾   Save PDF", self.save_pdf, "blue", width=144
+        )
+        self.save_button.config(state=tk.DISABLED)
+
+        self.history_button = self._make_btn(
+            self._ctrl, "📚   History", self.open_history, "purple", width=132
+        )
+
+        for btn in (self.start_button, self.stop_button,
+                    self.save_button, self.history_button):
+            btn.pack(side="left", padx=5, expand=True)
+
+        # ── footer ──────────────────────────────────────────────────────────
+        self._lbl_footer = tk.Label(
+            self.root,
+            text="🎙  Listens on-device   ·   🤖  AI-structured notes   ·   🗄  Persistent history",
+            font=FONT_SMALL, fg=T["text_muted"], bg=T["bg_app"]
+        )
+        self._lbl_footer.pack(pady=(2, 14))
+        self._themed_widgets.append((self._lbl_footer, "label", "bg_app", "text_muted"))
+
+    # -----------------------------------------------------------------------
+    # Widget helpers
+    # -----------------------------------------------------------------------
+    def _make_btn(self, parent, text, command, color_key, width=150):
+        btn = RoundedButton(parent, text, command, color_key, width=width)
+        self._rounded_buttons.append(btn)
+        return btn
+
+    def _stat_card(self, parent, icon, caption, initial):
+        card = tk.Frame(
+            parent, bg=T["bg_card"],
+            highlightbackground=T["border"], highlightthickness=1
+        )
+        card.pack(side="left", fill="both", expand=True, padx=5)
+        self._themed_widgets.append((card, "frame_border", "bg_card", "border"))
+
+        val_lbl = tk.Label(card, text=initial, font=FONT_STAT,
+                           fg=T["text_primary"], bg=T["bg_card"])
+        val_lbl.pack(pady=(10, 0))
+        self._themed_widgets.append((val_lbl, "label", "bg_card", "text_primary"))
+
+        cap_lbl = tk.Label(card, text=f"{icon}  {caption}", font=FONT_SMALL,
+                           fg=T["text_muted"], bg=T["bg_card"])
+        cap_lbl.pack(pady=(0, 10))
+        self._themed_widgets.append((cap_lbl, "label", "bg_card", "text_muted"))
+
+        return val_lbl
+
+    def _style_scrollbar(self, widget):
         try:
-            self.transcript_box.vbar.config(troughcolor=BG_CARD, bg=BORDER,
-                                            activebackground=ACCENT,
-                                            relief="flat", bd=0)
+            widget.vbar.config(
+                troughcolor=T["bg_card"], bg=T["scrollbar"],
+                activebackground=T["accent"], relief="flat", bd=0
+            )
         except Exception:
             pass
 
-        controls = tk.Frame(self.root, bg=BG_APP)
-        controls.pack(fill="x", padx=22, pady=(6, 4))
+    # -----------------------------------------------------------------------
+    # Theme switch
+    # -----------------------------------------------------------------------
+    def _toggle_theme(self):
+        next_name = "light" if T["name"] == "dracula" else "dracula"
+        T.clear()
+        T.update(THEMES[next_name])
+        self._apply_theme()
 
-        self.start_button = RoundedButton(
-            controls, "▶  Start Session", self.start_session,
-            GREEN, GREEN_HOVER, width=170
-        )
-        self.start_button.pack(side="left", padx=5, expand=True)
+    def _apply_theme(self):
+        self.root.configure(bg=T["bg_app"])
 
-        self.stop_button = RoundedButton(
-            controls, "■  Stop & Notes", self.stop_session,
-            RED, RED_HOVER, width=160
-        )
-        self.stop_button.pack(side="left", padx=5, expand=True)
-        self.stop_button.config(state=tk.DISABLED)
+        for entry in self._themed_widgets:
+            widget, kind = entry[0], entry[1]
+            try:
+                if kind == "frame":
+                    widget.configure(bg=T[entry[2]])
+                elif kind == "frame_border":
+                    widget.configure(bg=T[entry[2]],
+                                     highlightbackground=T[entry[3]])
+                elif kind == "label":
+                    widget.configure(bg=T[entry[2]], fg=T[entry[3]])
+                elif kind == "canvas":
+                    widget.configure(bg=T[entry[2]])
+                elif kind == "text":
+                    widget.configure(
+                        bg=T[entry[2]], fg=T[entry[3]],
+                        insertbackground=T[entry[3]],
+                        selectbackground=T["select_bg"]
+                    )
+            except Exception:
+                pass
 
-        self.save_button = RoundedButton(
-            controls, "💾  Save PDF", self.save_pdf,
-            BLUE, BLUE_HOVER, width=140
-        )
-        self.save_button.pack(side="left", padx=5, expand=True)
-        self.save_button.config(state=tk.DISABLED)
+        # repaint pill
+        self._pill_canvas.itemconfigure(self._pill_bg,
+                                        fill=T["pill_bg"], outline=T["border"])
+        self._pill_canvas.itemconfigure(self._pill_text, fill=T["text_primary"])
 
-        self.history_button = RoundedButton(
-            controls, "📚  History", self.open_history,
-            PURPLE, PURPLE_HOVER, width=130
-        )
-        self.history_button.pack(side="left", padx=5, expand=True)
+        # repaint title colour
+        self._lbl_title.configure(fg=T["text_heading"])
 
-        tk.Label(
-            self.root,
-            text="🎙️ Listens on-device   ·   🤖 Writes your notes   ·   🍃 Keeps note history",
-            font=(FONT, 9), fg=TEXT_MUTED, bg=BG_APP
-        ).pack(pady=(0, 12))
+        # repaint toggle label
+        self._toggle_btn.configure(text=T["toggle_label"])
 
-    def _stat_card(self, parent, icon, caption, initial):
-        card = tk.Frame(parent, bg=BG_CARD,
-                        highlightbackground=BORDER, highlightthickness=1)
-        card.pack(side="left", fill="both", expand=True, padx=4)
-        value = tk.Label(card, text=initial, font=(FONT, 15, "bold"),
-                         fg=TEXT_PRIMARY, bg=BG_CARD)
-        value.pack(pady=(10, 0))
-        tk.Label(card, text=f"{icon}  {caption}", font=(FONT, 9),
-                 fg=TEXT_MUTED, bg=BG_CARD).pack(pady=(0, 10))
-        return value, card
+        # repaint rounded buttons
+        for btn in self._rounded_buttons:
+            btn.apply_theme()
+
+        # style scrollbar
+        self._style_scrollbar(self.transcript_box)
+
+    # -----------------------------------------------------------------------
+    # Status helpers
+    # -----------------------------------------------------------------------
+    STATUS_COLORS = {
+        "gray":   "text_muted",
+        "orange": "amber",
+        "green":  "green",
+        "blue":   "blue",
+        "red":    "red",
+        "violet": "accent",
+    }
+    STATUS_SHORT = {
+        "gray":   "Idle",
+        "orange": "Working…",
+        "green":  "Listening",
+        "blue":   "Ready",
+        "red":    "Error",
+        "violet": "Busy",
+    }
 
     def _update_status(self, text, color="gray"):
         def apply():
-            c = STATUS_COLORS.get(color, TEXT_MUTED)
-            self._status_color = c
-            self.status_pill.itemconfigure(self._pill_text,
-                                           text=STATUS_SHORT.get(color, "Status"))
-            self.status_pill.itemconfigure(self._pill_dot, fill=c)
-            detail_color = c if color in ("orange", "blue", "red") else TEXT_MUTED
-            self.status_detail.config(text=text, fg=detail_color)
+            color_key = self.STATUS_COLORS.get(color, "text_muted")
+            dot_color = T[color_key]
+            self._pill_canvas.itemconfigure(self._pill_dot, fill=dot_color)
+            self._pill_canvas.itemconfigure(
+                self._pill_text, text=self.STATUS_SHORT.get(color, "…")
+            )
+            fg = dot_color if color in ("orange", "blue", "red") else T["text_muted"]
+            self._lbl_status.configure(text=text, fg=fg)
         self.root.after(0, apply)
 
     def _refresh_saved_count(self):
@@ -282,7 +489,7 @@ class TutorialToNotesApp:
 
     def _set_live(self, visible):
         if visible:
-            self.live_badge.pack(side="left", padx=10)
+            self.live_badge.pack(side="left", padx=12)
         else:
             self.live_badge.pack_forget()
 
@@ -297,8 +504,9 @@ class TutorialToNotesApp:
         self._record_seconds += 1
         m, s = divmod(self._record_seconds, 60)
         h, m = divmod(m, 60)
-        text = f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
-        self.duration_value.config(text=text)
+        self.duration_value.config(
+            text=f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+        )
         self.root.after(1000, self._tick)
 
     def _start_pulse(self):
@@ -309,9 +517,10 @@ class TutorialToNotesApp:
         if not self.is_session_active:
             return
         self._pulse_on = not self._pulse_on
-        fill = self._status_color if self._pulse_on else BG_CARD
-        self.status_pill.itemconfigure(self._pill_dot, fill=fill)
-        self.root.after(550, self._pulse)
+        color_key = self.STATUS_COLORS.get("green", "green")
+        fill = T[color_key] if self._pulse_on else T["pill_bg"]
+        self._pill_canvas.itemconfigure(self._pill_dot, fill=fill)
+        self.root.after(600, self._pulse)
 
     def _append_transcript(self, text):
         def update():
@@ -319,15 +528,12 @@ class TutorialToNotesApp:
             self.transcript_box.insert(tk.END, text + " ")
             self.transcript_box.see(tk.END)
             self.transcript_box.config(state=tk.DISABLED)
-            self._word_count += len(text.split())
-            self.words_value.config(text=str(self._word_count))
         self.root.after(0, update)
 
     # -----------------------------------------------------------------------
     # Title extraction
     # -----------------------------------------------------------------------
     def _extract_title(self, notes_markdown):
-        """Extract the first # heading from Gemini's notes as the session title"""
         for line in notes_markdown.split("\n"):
             line = line.strip()
             if line.startswith("# "):
@@ -341,7 +547,7 @@ class TutorialToNotesApp:
         if not GEMINI_API_KEY:
             messagebox.showerror(
                 "Missing API Key",
-                "Gemini_Api_Key not found.\n\nMake sure a .env file exists in this folder with:\nGemini_Api_Key=your_key_here"
+                "Gemini_Api_Key not found in .env.\n\nAdd this line to your .env file:\nGemini_Api_Key=your_key_here"
             )
             return
 
@@ -354,29 +560,26 @@ class TutorialToNotesApp:
         self.transcript_box.delete(1.0, tk.END)
         self.transcript_box.config(state=tk.DISABLED)
 
-        self._word_count = 0
-        self.words_value.config(text="0")
         self._set_live(True)
         self._start_timer()
         self._start_pulse()
-
-        self._update_status("Loading Whisper model...", "orange")
+        self._update_status("Loading Whisper model…", "orange")
         threading.Thread(target=self._init_and_start, daemon=True).start()
 
     def _init_and_start(self):
-        self.transcriber = Transcriber(text_callback=self._append_transcript, model_size="base")
+        self.transcriber = Transcriber(
+            text_callback=self._append_transcript, model_size="base"
+        )
         self.transcriber.start()
-
         self.audio_capture = AudioCapture(chunk_callback=self.transcriber.queue_chunk)
         self.audio_capture.start()
-
-        self._update_status("Listening...", "green")
+        self._update_status("Listening — play your tutorial now.", "green")
 
     def stop_session(self):
         self.is_session_active = False
         self.stop_button.config(state=tk.DISABLED)
         self._set_live(False)
-        self._update_status("Stopping and generating notes...", "orange")
+        self._update_status("Stopping and generating notes…", "orange")
         threading.Thread(target=self._stop_and_generate, daemon=True).start()
 
     def _stop_and_generate(self):
@@ -388,15 +591,14 @@ class TutorialToNotesApp:
         full_transcript = self.transcriber.get_full_transcript() if self.transcriber else ""
 
         if not full_transcript.strip():
-            self._update_status("No audio captured.", "red")
+            self._update_status("No audio captured — nothing to process.", "red")
             self.root.after(0, lambda: self.start_button.config(state=tk.NORMAL))
             return
 
-        self._update_status("Generating structured notes with Gemini...", "orange")
-        self.note_generator = NoteGenerator(api_key=GEMINI_API_KEY)
+        self._update_status("Generating structured notes with Gemini…", "orange")
+        self.note_generator  = NoteGenerator(api_key=GEMINI_API_KEY)
         self.generated_notes = self.note_generator.generate_notes(full_transcript)
 
-        # Extract title from Gemini's notes and auto-save to MongoDB
         title = self._extract_title(self.generated_notes)
         self.db.save_session(
             title=title,
@@ -404,8 +606,7 @@ class TutorialToNotesApp:
             notes_markdown=self.generated_notes
         )
         self._refresh_saved_count()
-
-        self._update_status("Notes ready! Click 'Save PDF'.", "blue")
+        self._update_status("Notes ready — save as PDF or check History.", "blue")
         self.root.after(0, self._enable_save)
 
     def _enable_save(self):
@@ -418,17 +619,15 @@ class TutorialToNotesApp:
             return
 
         title = self._extract_title(self.generated_notes)
-
         file_path = filedialog.asksaveasfilename(
             defaultextension=".pdf",
             filetypes=[("PDF files", "*.pdf")],
             initialfile=f"{title}.pdf"
         )
-
         if file_path:
             self.pdf_exporter.export(self.generated_notes, file_path, title=title)
-            self._update_status(f"Saved to {os.path.basename(file_path)}", "green")
-            messagebox.showinfo("Saved", f"Notes saved successfully to:\n{file_path}")
+            self._update_status(f"Saved — {os.path.basename(file_path)}", "green")
+            messagebox.showinfo("Saved", f"PDF saved to:\n{file_path}")
 
     # -----------------------------------------------------------------------
     # History window
@@ -439,7 +638,7 @@ class TutorialToNotesApp:
         except Exception as exc:
             messagebox.showerror(
                 "Database Error",
-                f"Could not load sessions from MongoDB.\n\n{exc}\n\nIs 'docker compose up' running?"
+                f"Could not reach MongoDB.\n\n{exc}\n\nMake sure 'docker compose up' is running."
             )
             return
 
@@ -447,135 +646,121 @@ class TutorialToNotesApp:
             messagebox.showinfo("History", "No saved sessions yet.")
             return
 
-        history_window = tk.Toplevel(self.root)
-        history_window.title("Session History")
-        history_window.geometry("840x640")
-        history_window.minsize(720, 520)
-        history_window.configure(bg=BG_APP)
-        history_window.transient(self.root)
+        hw = tk.Toplevel(self.root)
+        hw.title("Session History")
+        hw.geometry("860x660")
+        hw.minsize(740, 540)
+        hw.configure(bg=T["bg_app"])
+        hw.transient(self.root)
 
-        header = tk.Frame(history_window, bg=BG_APP)
-        header.pack(fill="x", padx=20, pady=(16, 8))
-        tk.Label(header, text="📚 Session History",
-                 font=(FONT, 16, "bold"), fg=TEXT_PRIMARY,
-                 bg=BG_APP).pack(side="left")
-        tk.Label(header, text=f"{len(sessions)} saved",
-                 font=(FONT, 10), fg=TEXT_MUTED,
-                 bg=BG_APP).pack(side="left", padx=10, pady=(4, 0))
+        # header
+        h_bar = tk.Frame(hw, bg=T["bg_app"])
+        h_bar.pack(fill="x", padx=22, pady=(18, 6))
 
-        list_card = tk.Frame(history_window, bg=BG_CARD,
-                             highlightbackground=BORDER, highlightthickness=1)
-        list_card.pack(fill="x", padx=20, pady=6)
+        tk.Label(h_bar, text="📚  Session History",
+                 font=(FONT_FAMILY, 15, "bold"),
+                 fg=T["text_heading"], bg=T["bg_app"]).pack(side="left")
+        tk.Label(h_bar, text=f"{len(sessions)} sessions saved",
+                 font=FONT_SMALL, fg=T["text_muted"],
+                 bg=T["bg_app"]).pack(side="left", padx=12, pady=(4, 0))
 
-        list_frame = tk.Frame(list_card, bg=BG_CARD)
-        list_frame.pack(padx=10, pady=10, fill="both", expand=True)
+        # session list
+        list_card = tk.Frame(hw, bg=T["bg_card"],
+                             highlightbackground=T["border"], highlightthickness=1)
+        list_card.pack(fill="x", padx=22, pady=4)
 
-        scrollbar = tk.Scrollbar(list_frame, troughcolor=BG_CARD, bg=BORDER,
-                                 activebackground=ACCENT, relief="flat", bd=0)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        list_inner = tk.Frame(list_card, bg=T["bg_card"])
+        list_inner.pack(padx=10, pady=10, fill="both", expand=True)
 
-        session_listbox = tk.Listbox(
-            list_frame, font=(FONT, 11), height=7,
-            bg=BG_SOFT, fg=TEXT_PRIMARY,
-            selectbackground=ACCENT, selectforeground="#FFFFFF",
+        sb = tk.Scrollbar(list_inner, troughcolor=T["bg_card"],
+                          bg=T["scrollbar"], activebackground=T["accent"],
+                          relief="flat", bd=0)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        listbox = tk.Listbox(
+            list_inner, font=FONT_BODY, height=7,
+            bg=T["bg_input"], fg=T["text_primary"],
+            selectbackground=T["select_bg"], selectforeground=T["text_primary"],
             highlightthickness=0, relief="flat", bd=0,
-            activestyle="none",
-            yscrollcommand=scrollbar.set, selectmode=tk.SINGLE
+            activestyle="none", yscrollcommand=sb.set, selectmode=tk.SINGLE
         )
-        session_listbox.pack(side=tk.LEFT, fill="both", expand=True)
-        scrollbar.config(command=session_listbox.yview)
+        listbox.pack(side=tk.LEFT, fill="both", expand=True)
+        sb.config(command=listbox.yview)
 
-        for session in sessions:
-            session_listbox.insert(tk.END, "  " + session["title"])
+        for s in sessions:
+            listbox.insert(tk.END, "  " + s["title"])
 
-        preview_card = tk.Frame(history_window, bg=BG_CARD,
-                                highlightbackground=BORDER, highlightthickness=1)
-        preview_card.pack(fill="both", expand=True, padx=20, pady=6)
-        tk.Label(preview_card, text="📝 Notes Preview",
-                 font=(FONT, 11, "bold"), fg=TEXT_PRIMARY,
-                 bg=BG_CARD).pack(anchor="w", padx=12, pady=(10, 0))
+        # preview
+        prev_card = tk.Frame(hw, bg=T["bg_card"],
+                             highlightbackground=T["border"], highlightthickness=1)
+        prev_card.pack(fill="both", expand=True, padx=22, pady=4)
+
+        tk.Label(prev_card, text="📝  Notes Preview",
+                 font=FONT_HEADING, fg=T["text_primary"],
+                 bg=T["bg_card"]).pack(anchor="w", padx=14, pady=(12, 0))
 
         notes_box = scrolledtext.ScrolledText(
-            preview_card, wrap=tk.WORD, font=(FONT, 10),
-            bg=BG_SOFT, fg=TEXT_PRIMARY,
-            insertbackground=TEXT_PRIMARY, selectbackground=ACCENT,
-            relief="flat", bd=0, padx=10, pady=8, height=14
+            prev_card, wrap=tk.WORD, font=FONT_BODY,
+            bg=T["bg_input"], fg=T["text_primary"],
+            insertbackground=T["text_primary"],
+            selectbackground=T["select_bg"],
+            relief="flat", bd=0, padx=12, pady=10, height=14
         )
-        notes_box.pack(padx=12, pady=10, fill="both", expand=True)
+        notes_box.pack(padx=14, pady=10, fill="both", expand=True)
         notes_box.config(state=tk.DISABLED)
-        try:
-            notes_box.vbar.config(troughcolor=BG_CARD, bg=BORDER,
-                                  activebackground=ACCENT, relief="flat", bd=0)
-        except Exception:
-            pass
+        self._style_scrollbar(notes_box)
 
-        btn_frame = tk.Frame(history_window, bg=BG_APP)
-        btn_frame.pack(pady=(6, 16))
+        # buttons
+        btn_row = tk.Frame(hw, bg=T["bg_app"])
+        btn_row.pack(pady=(6, 18))
 
-        def on_select(event):
-            selection = session_listbox.curselection()
-            if not selection:
+        def on_select(_e):
+            sel = listbox.curselection()
+            if not sel:
                 return
-            selected_session = sessions[selection[0]]
             notes_box.config(state=tk.NORMAL)
             notes_box.delete(1.0, tk.END)
-            notes_box.insert(tk.END, selected_session["notes_markdown"])
+            notes_box.insert(tk.END, sessions[sel[0]]["notes_markdown"])
             notes_box.config(state=tk.DISABLED)
 
         def export_selected():
-            selection = session_listbox.curselection()
-            if not selection:
-                messagebox.showwarning("No Selection", "Please select a session first.")
+            sel = listbox.curselection()
+            if not sel:
+                messagebox.showwarning("Nothing selected", "Please click a session first.")
                 return
-
-            selected_session = sessions[selection[0]]
-            title = selected_session["title"]
-
-            file_path = filedialog.asksaveasfilename(
+            s    = sessions[sel[0]]
+            path = filedialog.asksaveasfilename(
                 defaultextension=".pdf",
                 filetypes=[("PDF files", "*.pdf")],
-                initialfile=f"{title}.pdf"
+                initialfile=f"{s['title']}.pdf"
             )
-
-            if file_path:
-                self.pdf_exporter.export(
-                    selected_session["notes_markdown"],
-                    file_path,
-                    title=title
-                )
-                messagebox.showinfo("Saved", f"PDF saved to:\n{file_path}")
+            if path:
+                self.pdf_exporter.export(s["notes_markdown"], path, title=s["title"])
+                messagebox.showinfo("Saved", f"PDF saved to:\n{path}")
 
         def delete_selected():
-            selection = session_listbox.curselection()
-            if not selection:
-                messagebox.showwarning("No Selection", "Please select a session first.")
+            sel = listbox.curselection()
+            if not sel:
+                messagebox.showwarning("Nothing selected", "Please click a session first.")
                 return
-
-            confirm = messagebox.askyesno(
-                "Delete Session",
-                "Are you sure you want to delete this session?"
-            )
-            if confirm:
-                selected_session = sessions[selection[0]]
-                self.db.delete_session(str(selected_session["_id"]))
-                sessions.pop(selection[0])
-                session_listbox.delete(selection[0])
+            if messagebox.askyesno("Delete", "Permanently delete this session?"):
+                self.db.delete_session(str(sessions[sel[0]]["_id"]))
+                sessions.pop(sel[0])
+                listbox.delete(sel[0])
                 notes_box.config(state=tk.NORMAL)
                 notes_box.delete(1.0, tk.END)
                 notes_box.config(state=tk.DISABLED)
                 self._refresh_saved_count()
 
-        session_listbox.bind("<<ListboxSelect>>", on_select)
+        listbox.bind("<<ListboxSelect>>", on_select)
 
-        RoundedButton(
-            btn_frame, "📄  Export PDF", export_selected,
-            BLUE, BLUE_HOVER, width=170
-        ).grid(row=0, column=0, padx=6)
+        export_btn = RoundedButton(btn_row, "📄   Export PDF",
+                                   export_selected, "blue", width=176)
+        export_btn.grid(row=0, column=0, padx=6)
 
-        RoundedButton(
-            btn_frame, "🗑  Delete", delete_selected,
-            RED, RED_HOVER, width=140
-        ).grid(row=0, column=1, padx=6)
+        delete_btn = RoundedButton(btn_row, "🗑   Delete",
+                                   delete_selected, "red", width=144)
+        delete_btn.grid(row=0, column=1, padx=6)
 
     # -----------------------------------------------------------------------
     # Shutdown
@@ -593,5 +778,5 @@ class TutorialToNotesApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = TutorialToNotesApp(root)
+    app  = TutorialToNotesApp(root)
     root.mainloop()
