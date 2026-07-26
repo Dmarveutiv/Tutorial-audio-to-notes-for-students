@@ -11,24 +11,17 @@ from note_generator import NoteGenerator
 from pdf_exporter import PDFExporter
 from db_handler import DBHandler
 
-# Load environment variables from .env (must be in the same folder as this file)
 load_dotenv()
 GEMINI_API_KEY = os.getenv("Gemini_Api_Key")
 
-
-# ---------------------------------------------------------------------------
-# Dark theme palette
-# ---------------------------------------------------------------------------
 FONT = "Segoe UI"
-
-BG_APP       = "#0B0E14"   # main window background
-BG_CARD      = "#131926"   # card background
-BG_SOFT      = "#18202F"   # inner widgets (text boxes, listbox)
-BORDER       = "#232D3F"   # subtle card borders
+BG_APP       = "#0B0E14"
+BG_CARD      = "#131926"
+BG_SOFT      = "#18202F"
+BORDER       = "#232D3F"
 TEXT_PRIMARY = "#E9EEF7"
 TEXT_MUTED   = "#8B98AB"
-
-ACCENT       = "#7C5CFF"   # brand violet
+ACCENT       = "#7C5CFF"
 GREEN        = "#22C55E"
 GREEN_HOVER  = "#34D273"
 RED          = "#EF4444"
@@ -38,7 +31,6 @@ BLUE_HOVER   = "#5897F8"
 PURPLE       = "#A855F7"
 PURPLE_HOVER = "#BC71F9"
 AMBER        = "#F59E0B"
-
 BTN_DISABLED    = "#242D3C"
 BTN_DISABLED_FG = "#5C6B7F"
 
@@ -62,7 +54,6 @@ STATUS_SHORT = {
 
 
 def _rounded_points(x1, y1, x2, y2, r):
-    """Point list for a smoothed rounded rectangle on a Canvas."""
     return [
         x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
         x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
@@ -71,12 +62,6 @@ def _rounded_points(x1, y1, x2, y2, r):
 
 
 class RoundedButton(tk.Canvas):
-    """Modern rounded-corner button with hover / disabled states.
-
-    Exposes a minimal tk.Button-compatible interface (config(state=...),
-    config(text=...)) so it can drop into the existing app logic.
-    """
-
     def __init__(self, master, text, command, bg, hover_bg,
                  fg="#FFFFFF", width=150, height=46, radius=14,
                  font=(FONT, 10, "bold")):
@@ -100,7 +85,6 @@ class RoundedButton(tk.Canvas):
         self.bind("<Leave>", self._on_leave)
         self.bind("<Button-1>", self._on_click)
 
-    # -- events -------------------------------------------------------------
     def _on_enter(self, _event):
         if self._enabled:
             self.itemconfigure(self._rect, fill=self._hover_bg)
@@ -115,7 +99,6 @@ class RoundedButton(tk.Canvas):
         if self._enabled and self._command:
             self._command()
 
-    # -- tk.Button-compatible bits ------------------------------------------
     def config(self, cnf=None, **kw):
         if "state" in kw:
             self._set_enabled(kw.pop("state") != tk.DISABLED)
@@ -162,11 +145,7 @@ class TutorialToNotesApp:
         self._build_gui()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-    # -----------------------------------------------------------------------
-    # GUI construction
-    # -----------------------------------------------------------------------
     def _build_gui(self):
-        # ---- header --------------------------------------------------------
         header = tk.Frame(self.root, bg=BG_APP)
         header.pack(fill="x", padx=22, pady=(18, 4))
 
@@ -178,7 +157,6 @@ class TutorialToNotesApp:
         tk.Label(title_block, text="Turn any online Lecture/Tutorial into summarized, structured notes ✨",
                  font=(FONT, 10), fg=TEXT_MUTED, bg=BG_APP).pack(anchor="w")
 
-        # status pill (right side of header)
         self.status_pill = tk.Canvas(header, width=150, height=36, bg=BG_APP,
                                      bd=0, highlightthickness=0)
         self.status_pill.pack(side="right", anchor="n", pady=8)
@@ -194,12 +172,10 @@ class TutorialToNotesApp:
             fill=TEXT_PRIMARY, font=(FONT, 10, "bold")
         )
 
-        # detailed status line under the header
         self.status_detail = tk.Label(self.root, text="Ready when you are.",
                                       font=(FONT, 9), fg=TEXT_MUTED, bg=BG_APP)
         self.status_detail.pack(pady=(0, 4))
 
-        # ---- stats row -----------------------------------------------------
         stats = tk.Frame(self.root, bg=BG_APP)
         stats.pack(fill="x", padx=22, pady=6)
 
@@ -208,7 +184,6 @@ class TutorialToNotesApp:
         self.saved_value, _ = self._stat_card(stats, "💾", "Saved sessions", "—")
         self._refresh_saved_count()
 
-        # ---- transcript card ------------------------------------------------
         transcript_card = tk.Frame(self.root, bg=BG_CARD,
                                    highlightbackground=BORDER,
                                    highlightthickness=1)
@@ -223,7 +198,6 @@ class TutorialToNotesApp:
         self.live_badge = tk.Label(t_head, text="● REC",
                                    font=(FONT, 9, "bold"),
                                    fg="#FFFFFF", bg=RED, padx=8, pady=1)
-        # (packed only while recording — see _set_live)
 
         self.transcript_box = scrolledtext.ScrolledText(
             transcript_card, wrap=tk.WORD, font=(FONT, 10),
@@ -240,7 +214,6 @@ class TutorialToNotesApp:
         except Exception:
             pass
 
-        # ---- control bar ----------------------------------------------------
         controls = tk.Frame(self.root, bg=BG_APP)
         controls.pack(fill="x", padx=22, pady=(6, 4))
 
@@ -270,7 +243,6 @@ class TutorialToNotesApp:
         )
         self.history_button.pack(side="left", padx=5, expand=True)
 
-        # ---- footer ----------------------------------------------------------
         tk.Label(
             self.root,
             text="🎙️ Listens on-device   ·   🤖 Writes your notes   ·   🍃 Keeps note history",
@@ -288,11 +260,7 @@ class TutorialToNotesApp:
                  fg=TEXT_MUTED, bg=BG_CARD).pack(pady=(0, 10))
         return value, card
 
-    # -----------------------------------------------------------------------
-    # Status / stats helpers
-    # -----------------------------------------------------------------------
     def _update_status(self, text, color="gray"):
-        """Thread-safe status update (safe to call from worker threads)."""
         def apply():
             c = STATUS_COLORS.get(color, TEXT_MUTED)
             self._status_color = c
@@ -356,7 +324,18 @@ class TutorialToNotesApp:
         self.root.after(0, update)
 
     # -----------------------------------------------------------------------
-    # Session flow (logic unchanged from the original app)
+    # Title extraction
+    # -----------------------------------------------------------------------
+    def _extract_title(self, notes_markdown):
+        """Extract the first # heading from Gemini's notes as the session title"""
+        for line in notes_markdown.split("\n"):
+            line = line.strip()
+            if line.startswith("# "):
+                return line[2:].strip()
+        return datetime.now().strftime("Tutorial Notes - %Y-%m-%d %H:%M")
+
+    # -----------------------------------------------------------------------
+    # Session flow
     # -----------------------------------------------------------------------
     def start_session(self):
         if not GEMINI_API_KEY:
@@ -417,8 +396,8 @@ class TutorialToNotesApp:
         self.note_generator = NoteGenerator(api_key=GEMINI_API_KEY)
         self.generated_notes = self.note_generator.generate_notes(full_transcript)
 
-        # Auto-save session to MongoDB
-        title = datetime.now().strftime("Tutorial Notes - %Y-%m-%d %H:%M")
+        # Extract title from Gemini's notes and auto-save to MongoDB
+        title = self._extract_title(self.generated_notes)
         self.db.save_session(
             title=title,
             transcript=full_transcript,
@@ -438,14 +417,16 @@ class TutorialToNotesApp:
             messagebox.showwarning("No Notes", "No notes have been generated yet.")
             return
 
+        title = self._extract_title(self.generated_notes)
+
         file_path = filedialog.asksaveasfilename(
             defaultextension=".pdf",
             filetypes=[("PDF files", "*.pdf")],
-            initialfile="tutorial_notes.pdf"
+            initialfile=f"{title}.pdf"
         )
 
         if file_path:
-            self.pdf_exporter.export(self.generated_notes, file_path, title="Tutorial Notes")
+            self.pdf_exporter.export(self.generated_notes, file_path, title=title)
             self._update_status(f"Saved to {os.path.basename(file_path)}", "green")
             messagebox.showinfo("Saved", f"Notes saved successfully to:\n{file_path}")
 
@@ -473,7 +454,6 @@ class TutorialToNotesApp:
         history_window.configure(bg=BG_APP)
         history_window.transient(self.root)
 
-        # header
         header = tk.Frame(history_window, bg=BG_APP)
         header.pack(fill="x", padx=20, pady=(16, 8))
         tk.Label(header, text="📚 Session History",
@@ -483,7 +463,6 @@ class TutorialToNotesApp:
                  font=(FONT, 10), fg=TEXT_MUTED,
                  bg=BG_APP).pack(side="left", padx=10, pady=(4, 0))
 
-        # session list card
         list_card = tk.Frame(history_window, bg=BG_CARD,
                              highlightbackground=BORDER, highlightthickness=1)
         list_card.pack(fill="x", padx=20, pady=6)
@@ -509,7 +488,6 @@ class TutorialToNotesApp:
         for session in sessions:
             session_listbox.insert(tk.END, "  " + session["title"])
 
-        # notes preview card
         preview_card = tk.Frame(history_window, bg=BG_CARD,
                                 highlightbackground=BORDER, highlightthickness=1)
         preview_card.pack(fill="both", expand=True, padx=20, pady=6)
@@ -531,12 +509,10 @@ class TutorialToNotesApp:
         except Exception:
             pass
 
-        # buttons
         btn_frame = tk.Frame(history_window, bg=BG_APP)
         btn_frame.pack(pady=(6, 16))
 
         def on_select(event):
-            """Load selected session notes into preview box"""
             selection = session_listbox.curselection()
             if not selection:
                 return
@@ -547,30 +523,29 @@ class TutorialToNotesApp:
             notes_box.config(state=tk.DISABLED)
 
         def export_selected():
-            """Export selected session notes to PDF"""
             selection = session_listbox.curselection()
             if not selection:
                 messagebox.showwarning("No Selection", "Please select a session first.")
                 return
 
             selected_session = sessions[selection[0]]
+            title = selected_session["title"]
 
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".pdf",
                 filetypes=[("PDF files", "*.pdf")],
-                initialfile=f"{selected_session['title']}.pdf"
+                initialfile=f"{title}.pdf"
             )
 
             if file_path:
                 self.pdf_exporter.export(
                     selected_session["notes_markdown"],
                     file_path,
-                    title=selected_session["title"]
+                    title=title
                 )
                 messagebox.showinfo("Saved", f"PDF saved to:\n{file_path}")
 
         def delete_selected():
-            """Delete selected session from MongoDB"""
             selection = session_listbox.curselection()
             if not selection:
                 messagebox.showwarning("No Selection", "Please select a session first.")
