@@ -421,7 +421,7 @@ class TutorialToNotesApp:
             "green", icon_name="start", width=176
         )
         self.stop_button = self._make_btn(
-            self._ctrl, "Stop & Notes", self.stop_session,
+            self._ctrl, "Stop & Note", self.stop_session,
             "red", icon_name="stop", width=164
         )
         self.stop_button.config(state=tk.DISABLED)
@@ -444,7 +444,7 @@ class TutorialToNotesApp:
         # ── footer ──────────────────────────────────────────────────────────
         self._lbl_footer = tk.Label(
             self.root,
-            text="Listens on-device  ·  AI-structured notes  ·  Persistent history",
+            text="Listens on device  ·  AI-structured notes  ·  Persistent history",
             font=FONT_SMALL, fg=T["text_muted"], bg=T["bg_app"]
         )
         self._lbl_footer.pack(pady=(2, 14))
@@ -679,7 +679,7 @@ class TutorialToNotesApp:
         self.transcriber.start()
         self.audio_capture = AudioCapture(chunk_callback=self.transcriber.queue_chunk)
         self.audio_capture.start()
-        self._update_status("Listening — play your tutorial now.", "green")
+        self._update_status("Listening: play your tutorial now.", "green")
 
     def stop_session(self):
         self.is_session_active = False
@@ -697,7 +697,7 @@ class TutorialToNotesApp:
         full_transcript = self.transcriber.get_full_transcript() if self.transcriber else ""
 
         if not full_transcript.strip():
-            self._update_status("No audio captured — nothing to process.", "red")
+            self._update_status("No audio captured: nothing to process.", "red")
             self.root.after(0, lambda: self.start_button.config(state=tk.NORMAL))
             return
 
@@ -712,7 +712,7 @@ class TutorialToNotesApp:
             notes_markdown=self.generated_notes
         )
         self._refresh_saved_count()
-        self._update_status("Notes ready — save as PDF or check History.", "blue")
+        self._update_status("Notes ready: save as PDF or check History.", "blue")
         self.root.after(0, self._enable_save)
 
     def _enable_save(self):
